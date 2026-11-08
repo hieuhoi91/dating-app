@@ -486,7 +486,6 @@ function ProfileCard({
               : 'Chưa có ảnh'}
           </span>
           <button
-            disabled={photos.length < 2}
             className="icon-button glass-button"
             onClick={onBookmark}
             aria-label="Thêm vào danh sách yêu thích"
@@ -510,23 +509,24 @@ function ProfileCard({
             <MapPin size={14} /> {profile.city}
           </span>
         </div>
-        <div className="photo-arrows">
-          <button
-            disabled={photos.length < 2}
-            className="icon-button glass-button"
-            onClick={() => movePhoto(-1)}
-            aria-label="Ảnh trước"
-          >
-            <ChevronLeft size={17} />
-          </button>
-          <button
-            className="icon-button glass-button"
-            onClick={() => movePhoto(1)}
-            aria-label="Ảnh tiếp theo"
-          >
-            <ChevronRight size={17} />
-          </button>
-        </div>
+        {photos.length > 1 && (
+          <div className="photo-arrows">
+            <button
+              className="icon-button glass-button"
+              onClick={() => movePhoto(-1)}
+              aria-label="Ảnh trước"
+            >
+              <ChevronLeft size={17} />
+            </button>
+            <button
+              className="icon-button glass-button"
+              onClick={() => movePhoto(1)}
+              aria-label="Ảnh tiếp theo"
+            >
+              <ChevronRight size={17} />
+            </button>
+          </div>
+        )}
       </div>
       <div className="discover-info">
         <div className="profile-summary">
@@ -669,6 +669,8 @@ export default function AppPage() {
   } | null>(null);
   const [sendingCoupleInvite, setSendingCoupleInvite] = useState(false);
   const [incomingCoupleInvitation, setIncomingCoupleInvitation] =
+    useState<AppNotification | null>(null);
+  const [incomingLikeNotice, setIncomingLikeNotice] =
     useState<AppNotification | null>(null);
   const [coupleCelebration, setCoupleCelebration] = useState<{
     title: string;
@@ -1288,8 +1290,33 @@ export default function AppPage() {
         );
         const isCoupleAccepted =
           notification.type === 'couple.invitation.accepted';
+        const isIncomingLike = notification.type === 'like';
         if (!isCoupleAccepted) playNotificationSound();
-        notify(notification.title || 'Bạn có thông báo mới.');
+        if (!isIncomingLike && notification.type !== 'match') {
+          notify(notification.title || 'Bạn có thông báo mới.');
+        }
+        if (isIncomingLike) {
+          void apiRequest<{ notifications: AppNotification[] }>(
+            '/api/notifications',
+          )
+            .then(({ notifications }) => {
+              if (!active) return;
+              setNotificationData((current) =>
+                sameData(current, notifications) ? current : notifications,
+              );
+              const enriched = notifications.find(
+                (item) => item.id === notification.id,
+              );
+              if (enriched?.related_profile) {
+                setIncomingLikeNotice(enriched);
+              } else {
+                notify(notification.title || 'Bạn có một lượt thích mới.');
+              }
+            })
+            .catch((error: unknown) => {
+              if (active) reportApiError(error, notify);
+            });
+        }
         if (notification.type === 'couple.invitation') {
           setIncomingCoupleInvitation(notification);
           void apiRequest<{ notifications: AppNotification[] }>(
@@ -1414,6 +1441,12 @@ export default function AppPage() {
     refocusMessageInput.current = false;
     messageInputRef.current?.focus();
   }, [sendingMessage]);
+
+  useEffect(() => {
+    if (!incomingLikeNotice) return;
+    const timeout = window.setTimeout(() => setIncomingLikeNotice(null), 8000);
+    return () => window.clearTimeout(timeout);
+  }, [incomingLikeNotice]);
 
   useEffect(
     () => () => {
@@ -2018,6 +2051,7 @@ export default function AppPage() {
       setSelectedChatImages([]);
       refocusMessageInput.current = true;
       if (chatImageInputRef.current) chatImageInputRef.current.value = '';
+      setMessageDraft('');
     } catch (error) {
       if (images.length) {
         setMessages((items) => items.filter((item) => item.id !== pendingId));
@@ -2656,6 +2690,16 @@ export default function AppPage() {
                       conversation.latest_message.created_at,
                     ).toLocaleDateString('vi-VN')
                   : ''}
+                {!!conversation.unread_count && (
+                  <i
+                    className="conversation-unread-count"
+                    aria-label={`${conversation.unread_count} tin nhắn chưa đọc`}
+                  >
+                    {conversation.unread_count > 99
+                      ? '99+'
+                      : conversation.unread_count}
+                  </i>
+                )}
               </span>
             </button>
           );
@@ -3048,12 +3092,17 @@ export default function AppPage() {
         .map((notification) => {
           const isCoupleNotification =
             notification.type.startsWith('couple.invitation');
+          const isAcceptedCouple =
+            notification.type === 'couple.invitation.accepted';
           const relatedProfile = notification.related_profile;
           const relatedPerson = relatedProfile
             ? profileCardFromPublic(relatedProfile)
             : null;
           return (
-            <article className="notification-row" key={notification.id}>
+            <article
+              className={`notification-row notification-row-${notification.type.replaceAll('.', '-')} ${notification.read_at ? '' : 'notification-row-unread'}`}
+              key={notification.id}
+            >
               {relatedPerson &&
               (notification.type === 'match' || notification.type === 'like') ? (
                 <button
@@ -3077,7 +3126,7 @@ export default function AppPage() {
                   <Avatar image={relatedPerson.image} />
                   <span className="notification-avatar-badge">
                     {notification.type === 'match' ? (
-                      <HeartHandshake size={12} />
+                      <Sparkles size={12} />
                     ) : (
                       <Heart size={12} fill="currentColor" />
                     )}
@@ -3113,7 +3162,7 @@ export default function AppPage() {
                   <Bell size={18} />
                 </span>
               )}
-              <div>
+              <div className="notification-copy">
                 <strong>{notification.title}</strong>
                 <p>{notification.body}</p>
                 <small>
@@ -3134,7 +3183,7 @@ export default function AppPage() {
               )}
               {notification.type === 'couple.invitation' && (
                 <button
-                  className="button button-outline"
+                  className="button button-outline notification-action"
                   onClick={() => {
                     if (!notification.read_at)
                       void markNotificationRead(notification.id);
@@ -3146,10 +3195,25 @@ export default function AppPage() {
                   Xem lời mời
                 </button>
               )}
+              {isAcceptedCouple && (
+                <button
+                  type="button"
+                  className="button button-outline notification-action"
+                  onClick={() => {
+                    if (!notification.read_at)
+                      void markNotificationRead(notification.id);
+                    setCoupleWorkspaceOpened(true);
+                    setCoupleWorkspaceTab('space');
+                    setActiveView('couple');
+                  }}
+                >
+                  Mở Couple
+                </button>
+              )}
               {relatedPerson && notification.type === 'match' && (
                 <button
                   type="button"
-                  className="button button-outline"
+                  className="button button-outline notification-action"
                   onClick={() => openMatchNotification(notification)}
                 >
                   Xem Match
@@ -3158,7 +3222,7 @@ export default function AppPage() {
               {relatedPerson && notification.type === 'like' && (
                 <button
                   type="button"
-                  className="button button-outline"
+                  className="button button-outline notification-action"
                   onClick={() => {
                     if (!notification.read_at)
                       void markNotificationRead(notification.id);
@@ -4556,6 +4620,41 @@ export default function AppPage() {
           {toast}
         </div>
       )}
+      {incomingLikeNotice?.related_profile && (
+        <aside className="incoming-like-notice" role="status">
+          <Avatar
+            image={incomingLikeNotice.related_profile.photo_urls?.[0] ?? ''}
+          />
+          <div className="incoming-like-notice-copy">
+            <strong>
+              {incomingLikeNotice.related_profile.display_name || 'Ai đó'} đã
+              thích bạn
+            </strong>
+            <span>Chạm để xem người muốn kết nối với bạn.</span>
+          </div>
+          <button
+            type="button"
+            className="button button-outline incoming-like-notice-action"
+            onClick={() => {
+              setShowSentLikes(false);
+              setActiveView('likes');
+              setIncomingLikeNotice(null);
+              if (!incomingLikeNotice.read_at)
+                void markNotificationRead(incomingLikeNotice.id);
+            }}
+          >
+            Xem
+          </button>
+          <button
+            type="button"
+            className="icon-button incoming-like-notice-close"
+            aria-label="Đóng thông báo lượt thích"
+            onClick={() => setIncomingLikeNotice(null)}
+          >
+            <X size={15} />
+          </button>
+        </aside>
+      )}
       {coupleCelebration && (
         <CoupleCelebration
           title={coupleCelebration.title}
@@ -4597,8 +4696,8 @@ export default function AppPage() {
               <span className="match-confetti match-confetti-four" />
               <div className="match-avatar-pair">
                 <Avatar image={myPhoto} className="match-avatar-self" />
-                <span className="match-heart">
-                  <Heart size={22} fill="currentColor" />
+                <span className="match-sparkle-badge">
+                  <Sparkles size={21} />
                 </span>
                 <Avatar
                   image={matchCelebration.image}

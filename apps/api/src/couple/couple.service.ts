@@ -121,8 +121,18 @@ export class CoupleService {
       [userId],
     );
     const profiles = await this.rows(
-      `SELECT user_id AS id, username, display_name FROM profiles
-       WHERE user_id = ANY($1::uuid[])`,
+      `SELECT p.user_id AS id, p.username, p.display_name,
+              COALESCE((
+                SELECT array_agg(
+                  pp.secure_url
+                  ORDER BY pp.is_primary DESC,
+                           COALESCE(pp.role = 'avatar', false) DESC,
+                           pp.sort_order, pp.created_at
+                )
+                FROM profile_photos pp WHERE pp.user_id = p.user_id
+              ), '{}'::text[]) AS photo_urls
+       FROM profiles p
+       WHERE p.user_id = ANY($1::uuid[])`,
       [[...new Set(invitations.flatMap((item) => [item.sender_id, item.receiver_id]))]],
     );
     const byId = new Map(profiles.map((profile) => [profile.id, profile]));
@@ -299,7 +309,7 @@ export class CoupleService {
            LEAST($1::uuid, $2::uuid),
            GREATEST($1::uuid, $2::uuid)
          )
-         ON CONFLICT (user_low_id, user_high_id) DO UPDATE
+         ON CONFLICT (user_low_id, user_high_id) WHERE status = 'active' DO UPDATE
            SET status = 'active', ended_at = NULL
          RETURNING id`,
         [invitation.sender_id, invitation.receiver_id],

@@ -437,11 +437,12 @@ export class SocialService {
               COALESCE((
                 SELECT array_agg(
                   pp.secure_url
-                  ORDER BY pp.is_primary DESC,
-                           COALESCE(pp.role = 'avatar', false) DESC,
+                  ORDER BY COALESCE(pp.role = 'avatar', false) DESC,
                            pp.sort_order, pp.created_at
                 )
-                FROM profile_photos pp WHERE pp.user_id = p.user_id
+                FROM profile_photos pp
+                WHERE pp.user_id = p.user_id
+                  AND pp.role IS DISTINCT FROM 'cover'
               ), '{}'::text[]) AS photo_urls
        FROM profiles p
        JOIN private.user_personal_data target_data ON target_data.user_id = p.user_id

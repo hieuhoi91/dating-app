@@ -50,6 +50,100 @@ describe('CoupleService', () => {
     await expect(service.getOverview('user-id')).resolves.toEqual({ couple: null });
   });
 
+  it('includes the sender avatar on incoming Couple invitations', async () => {
+    const dataSource = {
+      query: vi.fn()
+        .mockResolvedValueOnce([{
+          id: 'invitation-id',
+          sender_id: 'sender-id',
+          receiver_id: 'receiver-id',
+          status: 'pending',
+        }])
+        .mockResolvedValueOnce([{
+          id: 'sender-id',
+          username: 'sender',
+          display_name: 'Sender',
+          photo_urls: ['https://cdn.example/avatar.jpg'],
+        }]),
+    };
+    const service = new CoupleService(
+      dataSource as never,
+      realtime as never,
+      cloudinaryDeletion as never,
+    );
+
+    await expect(service.listInvitations('receiver-id')).resolves.toMatchObject({
+      invitations: [{
+        sender: {
+          id: 'sender-id',
+          photo_urls: ['https://cdn.example/avatar.jpg'],
+        },
+      }],
+    });
+    expect(dataSource.query.mock.calls[1]?.[0]).toContain('AS photo_urls');
+    expect(dataSource.query.mock.calls[1]?.[0]).toContain('profile_photos pp');
+  });
+
+  it('accepts a Couple invitation using the active-match partial unique index', async () => {
+    const invitation = {
+      id: 'invitation-id',
+      sender_id: 'sender-id',
+      receiver_id: 'receiver-id',
+      status: 'pending',
+      expires_at: new Date(Date.now() + 60_000),
+    };
+    const managerQuery = vi.fn(async (sql: string) => {
+      if (sql.includes('SELECT * FROM couple_invitations')) return [invitation];
+      if (sql.includes('INSERT INTO couples')) return [{ id: 'couple-id' }];
+      if (sql.includes('SELECT id, status FROM matches')) {
+        return [{ id: 'old-match-id', status: 'ended' }];
+      }
+      if (sql.includes('INSERT INTO matches')) return [{ id: 'match-id' }];
+      if (sql.includes('INSERT INTO relationship_events')) return [{ id: 'event-id' }];
+      if (sql.includes('INSERT INTO notifications')) {
+        return [{
+          id: 'notification-id',
+          recipient_id: 'sender-id',
+          event_id: 'event-id',
+          type: 'couple.invitation.accepted',
+          title: 'Lời mời Couple đã được chấp nhận',
+          body: 'Hai bạn đã trở thành Couple!',
+          read_at: null,
+          created_at: new Date(),
+        }];
+      }
+      return [];
+    });
+    const dataSource = {
+      query: vi.fn(),
+      transaction: vi.fn(
+        (callback: (manager: { query: typeof managerQuery }) => unknown) =>
+          callback({ query: managerQuery }),
+      ),
+    };
+    const service = new CoupleService(
+      dataSource as never,
+      realtime as never,
+      cloudinaryDeletion as never,
+    );
+
+    await expect(
+      service.respondInvitation('receiver-id', 'invitation-id', true),
+    ).resolves.toEqual({ coupleId: 'couple-id', status: 'accepted' });
+
+    const matchInsert = managerQuery.mock.calls.find(([sql]) =>
+      sql.includes('INSERT INTO matches'),
+    );
+    expect(matchInsert?.[0]).toContain(
+      'ON CONFLICT (user_low_id, user_high_id) WHERE status = \'active\' DO UPDATE',
+    );
+    expect(realtime.emitToUsers).toHaveBeenCalledWith(
+      ['receiver-id', 'sender-id'],
+      'couple:updated',
+      { coupleId: 'couple-id' },
+    );
+  });
+
   it('keeps a partner answer private until both members have answered', async () => {
     const dataSource = {
       query: vi.fn()

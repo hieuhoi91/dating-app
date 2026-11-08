@@ -17,6 +17,14 @@ export type CoupleInvitation = {
   status: string;
   created_at: string;
   expires_at: string;
-  sender: { username: string | null; display_name: string } | null;
-  receiver: { username: string | null; display_name: string } | null;
+  sender: {
+    username: string | null;
+    display_name: string;
+    photo_urls: string[];
+  } | null;
+  receiver: {
+    username: string | null;
+    display_name: string;
+    photo_urls: string[];
+  } | null;
 };

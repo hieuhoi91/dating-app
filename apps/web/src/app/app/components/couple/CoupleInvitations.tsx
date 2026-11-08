@@ -1,13 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import {
   ArrowRight,
   Check,
   Clock3,
   HeartHandshake,
   Mail,
-  ShieldCheck,
   X,
 } from 'lucide-react';
 import type { CoupleInvitation } from './types';
@@ -116,9 +116,20 @@ export default function CoupleInvitations({
           incoming.map((invitation) => (
             <div className="couple-incoming-card" key={invitation.id}>
               <div className="couple-incoming-person">
-                <span className="couple-status-icon">
-                  <HeartHandshake size={18} />
-                </span>
+                {invitation.sender?.photo_urls?.[0] ? (
+                  <Image
+                    className="couple-invitation-avatar"
+                    src={invitation.sender.photo_urls[0]}
+                    alt={`Ảnh đại diện của ${displayName(invitation.sender, invitation.sender_id)}`}
+                    width={36}
+                    height={36}
+                    unoptimized
+                  />
+                ) : (
+                  <span className="couple-status-icon">
+                    <HeartHandshake size={18} />
+                  </span>
+                )}
                 <span>
                   <strong>
                     {displayName(invitation.sender, invitation.sender_id)}

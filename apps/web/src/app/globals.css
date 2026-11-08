@@ -2786,6 +2786,21 @@ html[data-season='winter'] .falling-petal {
   border-radius: 50%;
   background: var(--primary);
 }
+.conversation-time .conversation-unread-count {
+  min-width: 17px;
+  width: auto;
+  height: 17px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--primary);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 700;
+}
 .chat-safety-tip {
   display: flex;
   gap: 8px;
@@ -3618,6 +3633,13 @@ html[data-season='winter'] .falling-petal {
   display: flex;
   align-items: center;
   gap: 9px;
+}
+.couple-invitation-avatar {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-radius: 11px;
+  object-fit: cover;
 }
 .couple-incoming-person > span:last-child {
   display: grid;
@@ -5763,8 +5785,23 @@ html[data-season='winter'] .falling-petal {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 9px;
-  border-bottom: 1px solid #eee5e4;
+  margin-bottom: 9px;
+  padding: 12px;
+  border: 1px solid #eee5e4;
+  border-radius: 14px;
+  background: #fff;
+}
+.notification-row:hover {
+  border-color: #e4cbd0;
+  background: #fffdfd;
+}
+.notification-row-unread {
+  border-color: #ead4d9;
+  background: linear-gradient(105deg, #fff8f9, #fff 72%);
+}
+.notification-row-couple-invitation-accepted {
+  border-color: #e8d5d9;
+  background: linear-gradient(105deg, #fff7f8, #fff 78%);
 }
 .notification-icon {
   width: 37px;
@@ -5788,7 +5825,7 @@ html[data-season='winter'] .falling-petal {
   background: #f7f0e5;
 }
 .notification-row > div {
-  flex: 1;
+  flex: 0 0 auto;
 }
 .notification-avatar-button {
   position: relative;
@@ -5862,14 +5899,29 @@ html[data-season='winter'] .falling-petal {
 .notification-row strong {
   font-size: 11px;
 }
+.notification-copy {
+  min-width: 0;
+  flex: 1 !important;
+}
+.notification-copy strong {
+  color: var(--text);
+}
 .notification-row p {
   margin: 4px 0;
   color: #7e7275;
   font-size: 10px;
+  line-height: 1.5;
 }
 .notification-row small {
   color: #a29698;
   font-size: 9px;
+}
+.notification-action {
+  min-height: 34px;
+  flex: 0 0 auto;
+  padding: 0 12px;
+  font-size: 10px;
+  white-space: nowrap;
 }
 .notification-unread {
   width: 6px;
@@ -7016,6 +7068,60 @@ html[data-season='winter'] .falling-petal {
   color: #54856c;
   background: #eaf3ed;
 }
+.incoming-like-notice {
+  position: fixed;
+  z-index: 41;
+  right: 25px;
+  bottom: 24px;
+  width: min(440px, calc(100vw - 32px));
+  min-height: 76px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 42px 12px 14px;
+  border: 1px solid #e9dfe0;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: var(--shadow-md);
+  animation: toast-in 0.18s ease-out;
+}
+.incoming-like-notice > .avatar {
+  width: 43px;
+  height: 43px;
+  flex: 0 0 43px;
+}
+.incoming-like-notice-copy {
+  min-width: 0;
+  flex: 1;
+}
+.incoming-like-notice-copy strong,
+.incoming-like-notice-copy span {
+  display: block;
+}
+.incoming-like-notice-copy strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.incoming-like-notice-copy span {
+  margin-top: 5px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.incoming-like-notice-action {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 10px;
+}
+.incoming-like-notice-close {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 26px;
+  height: 26px;
+}
 @keyframes toast-in {
   from {
     opacity: 0;
@@ -7186,6 +7292,7 @@ html[data-season='winter'] .falling-petal {
   background: transparent;
 }
 .couple-celebration-icon {
+  isolation: isolate;
   position: relative;
   width: 92px;
   height: 82px;
@@ -7196,6 +7303,27 @@ html[data-season='winter'] .falling-petal {
   color: var(--primary);
   background: radial-gradient(circle, #f8e4e9 0, #fff 70%);
   animation: couple-heart-beat 1.2s ease-in-out infinite;
+}
+.couple-celebration-heart {
+  z-index: 1;
+  filter: drop-shadow(0 5px 8px rgba(184, 92, 114, 0.2));
+  animation: couple-heart-glow 1.2s ease-in-out infinite;
+}
+.couple-celebration-mini-heart {
+  position: absolute;
+  z-index: 2;
+  color: #c7798b;
+}
+.couple-celebration-mini-heart.mini-heart-left {
+  top: 11px;
+  left: 3px;
+  animation: couple-heart-float-left 1.8s ease-in-out infinite;
+}
+.couple-celebration-mini-heart.mini-heart-right {
+  right: 2px;
+  bottom: 8px;
+  color: #d7a35a;
+  animation: couple-heart-float-right 1.8s 0.3s ease-in-out infinite;
 }
 .couple-celebration-sparkle {
   position: absolute;
@@ -7244,6 +7372,40 @@ html[data-season='winter'] .falling-petal {
   }
   45% {
     transform: scale(1.08);
+  }
+}
+@keyframes couple-heart-glow {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.13) rotate(-4deg);
+  }
+  60% {
+    transform: scale(1.06) rotate(4deg);
+  }
+}
+@keyframes couple-heart-float-left {
+  0%,
+  100% {
+    opacity: 0.65;
+    transform: translateY(3px) scale(0.9) rotate(-12deg);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-7px) scale(1.08) rotate(8deg);
+  }
+}
+@keyframes couple-heart-float-right {
+  0%,
+  100% {
+    opacity: 0.65;
+    transform: translateY(2px) scale(0.9) rotate(10deg);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-8px) scale(1.12) rotate(-8deg);
   }
 }
 .match-celebration-backdrop {
@@ -7316,7 +7478,7 @@ html[data-season='winter'] .falling-petal {
   z-index: 1;
   animation: match-avatar-right 0.7s 0.08s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
-.match-heart {
+.match-sparkle-badge {
   position: absolute;
   z-index: 2;
   top: 50%;
@@ -7327,10 +7489,10 @@ html[data-season='winter'] .falling-petal {
   place-items: center;
   border: 4px solid white;
   border-radius: 50%;
-  color: white;
-  background: var(--primary);
-  box-shadow: 0 5px 16px rgba(145, 66, 87, 0.3);
-  animation: match-heart-pop 0.55s 0.42s cubic-bezier(0.2, 1.5, 0.4, 1) both;
+  color: #fff;
+  background: #8eaf91;
+  box-shadow: 0 5px 16px rgba(76, 116, 87, 0.28);
+  animation: match-sparkle-pop 0.55s 0.42s cubic-bezier(0.2, 1.5, 0.4, 1) both;
   transform: translate(-50%, -50%);
 }
 .match-sparkle {
@@ -7449,7 +7611,7 @@ html[data-season='winter'] .falling-petal {
     transform: translateX(0) rotate(5deg) scale(1);
   }
 }
-@keyframes match-heart-pop {
+@keyframes match-sparkle-pop {
   from {
     opacity: 0;
     transform: translate(-50%, -50%) scale(0.3);
@@ -8994,13 +9156,18 @@ html[data-season='winter'] .falling-petal {
   }
   .notification-row {
     gap: 8px;
-    padding: 10px 0;
+    padding: 10px;
   }
   .notification-row p {
     line-height: 1.5;
   }
   .notification-row > .icon-button {
     width: 28px;
+  }
+  .notification-action {
+    min-height: 30px;
+    padding: 0 8px;
+    font-size: 9px;
   }
   .vip-hero {
     min-height: 210px;

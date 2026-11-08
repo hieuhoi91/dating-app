@@ -86,6 +86,12 @@ describe('SocialService', () => {
       'BETWEEN COALESCE($3::integer, current_preferences.age_min)',
     );
     expect(managerQuery.mock.calls[4]?.[0]).toContain('p.gender = $5');
+    expect(managerQuery.mock.calls[4]?.[0]).toContain(
+      "pp.role IS DISTINCT FROM 'cover'",
+    );
+    expect(managerQuery.mock.calls[4]?.[0]).toContain(
+      "ORDER BY COALESCE(pp.role = 'avatar', false) DESC",
+    );
     expect(result.discovery).toMatchObject({
       unlimited: false,
       daily_limit: 20,

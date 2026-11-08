@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { HeartHandshake, Sparkles, X } from "lucide-react";
+import { Heart, Sparkles, X } from "lucide-react";
 
 export default function CoupleCelebration({
   title,
@@ -71,7 +71,21 @@ export default function CoupleCelebration({
         </button>
         <div className="couple-celebration-icon" aria-hidden="true">
           <Sparkles className="couple-celebration-sparkle sparkle-left" size={20} />
-          <HeartHandshake size={42} />
+          <Heart
+            className="couple-celebration-heart"
+            size={43}
+            fill="currentColor"
+          />
+          <Heart
+            className="couple-celebration-mini-heart mini-heart-left"
+            size={15}
+            fill="currentColor"
+          />
+          <Heart
+            className="couple-celebration-mini-heart mini-heart-right"
+            size={12}
+            fill="currentColor"
+          />
           <Sparkles className="couple-celebration-sparkle sparkle-right" size={17} />
         </div>
         <span className="eyebrow">MỘT KHỞI ĐẦU ĐẸP</span>
