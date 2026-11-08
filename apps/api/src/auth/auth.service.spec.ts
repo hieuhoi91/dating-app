@@ -1,4 +1,7 @@
-import { ConflictException } from '@nestjs/common';
+import {
+  ConflictException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
 import { EmailToken } from '../database/entities/email-token.entity.js';
 import { Profile } from '../database/entities/profile.entity.js';
@@ -96,6 +99,70 @@ describe('AuthService registration conflicts', () => {
     expect(result).toEqual({ user, verificationEmailSent: false });
     expect(repositories.get(User)?.save).toHaveBeenCalledTimes(1);
     expect(mailer.sendVerificationEmail).toHaveBeenCalledTimes(1);
+  });
+
+  describe('AuthService verification email resend', () => {
+    function createResendService(sendEmail: ReturnType<typeof vi.fn>) {
+      const user = {
+        id: 'user-id',
+        email: 'person@example.com',
+        emailVerified: false,
+      };
+      const tokenRepository = {
+        create: vi.fn((token) => token),
+        save: vi.fn().mockResolvedValue({}),
+      };
+      const dataSource = {
+        transaction: vi.fn((callback: (manager: unknown) => unknown) =>
+          callback({
+            getRepository: vi.fn(() => tokenRepository),
+          }),
+        ),
+      };
+      const emailTokens = {
+        delete: vi.fn().mockResolvedValue({ affected: 1 }),
+        update: vi.fn().mockResolvedValue({ affected: 1 }),
+      };
+      const mailer = {
+        sendVerificationEmail: sendEmail,
+        sendPasswordResetEmail: vi.fn(),
+      };
+      const service = new AuthService(
+        dataSource as never,
+        {} as never,
+        { get: vi.fn(() => 'smtp.gmail.com') } as never,
+        { findOneBy: vi.fn().mockResolvedValue(user) } as never,
+        {} as never,
+        emailTokens as never,
+        mailer as never,
+      );
+      return { service, emailTokens, tokenRepository };
+    }
+
+    it('keeps existing verification links usable when resending fails', async () => {
+      const { service, emailTokens, tokenRepository } = createResendService(
+        vi.fn().mockRejectedValue(new Error('SMTP rejected the message')),
+      );
+
+      await expect(
+        service.resendVerification('person@example.com'),
+      ).rejects.toBeInstanceOf(ServiceUnavailableException);
+
+      expect(tokenRepository.save).toHaveBeenCalledOnce();
+      expect(emailTokens.delete).toHaveBeenCalledOnce();
+      expect(emailTokens.update).not.toHaveBeenCalled();
+    });
+
+    it('consumes older verification links only after a resend succeeds', async () => {
+      const { service, emailTokens } = createResendService(
+        vi.fn().mockResolvedValue(undefined),
+      );
+
+      await service.resendVerification('person@example.com');
+
+      expect(emailTokens.delete).not.toHaveBeenCalled();
+      expect(emailTokens.update).toHaveBeenCalledOnce();
+    });
   });
 
   it('explains that an unverified account should use its sent verification email', async () => {

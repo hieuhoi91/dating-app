@@ -15,6 +15,32 @@ describe('validateEnvironment', () => {
     });
   });
 
+  it('accepts Resend API delivery without SMTP credentials', () => {
+    expect(
+      validateEnvironment({
+        ...validEnvironment,
+        RESEND_API_KEY: 're_test_key',
+        SMTP_FROM: 'DATING <hello@example.com>',
+        WEB_APP_URL: 'https://dating.example.com',
+      }),
+    ).toMatchObject({
+      RESEND_API_KEY: 're_test_key',
+      SMTP_FROM: 'DATING <hello@example.com>',
+      WEB_APP_URL: 'https://dating.example.com',
+    });
+  });
+
+  it('requires sender and web URL for Resend API delivery', () => {
+    expect(() =>
+      validateEnvironment({
+        ...validEnvironment,
+        RESEND_API_KEY: 're_test_key',
+        SMTP_FROM: undefined,
+        WEB_APP_URL: 'https://dating.example.com',
+      }),
+    ).toThrow('SMTP_FROM is required when email delivery is configured.');
+  });
+
   it('rejects missing database and JWT configuration', () => {
     expect(() =>
       validateEnvironment({

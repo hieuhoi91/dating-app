@@ -16,7 +16,7 @@ Currently implemented:
   `GET /auth/me` provide password authentication with short-lived JWT access
   cookies, rotating opaque refresh tokens, and scrypt password hashes.
 - Email verification and password reset use single-use, hashed PostgreSQL tokens
-  and the SMTP settings configured in `.env`.
+  and either the SMTP or Resend settings configured in `.env`.
 - Google OAuth uses a one-time state cookie and verified Google email; configure
   all Google client/callback variables to enable it.
 - `GET/PATCH /users/me` read and update the signed-in user's profile. Exact birth
@@ -69,13 +69,44 @@ Edit `.env` and set a private random `JWT_ACCESS_SECRET` of at least 32
 characters, your PostgreSQL `DATABASE_URL`, and exact comma-separated
 `CORS_ORIGIN` values. Set
 `DATABASE_SSL=true` when required by your provider and choose `DATABASE_POOL_MAX`
-between 1 and 50. Replace the SMTP example values with credentials for the
-mailer account you send from, and set `WEB_APP_URL` to the web origin. To enable
+between 1 and 50. For SMTP, replace the example values with credentials for the
+mailer account you send from, and set `WEB_APP_URL` to the web origin. Gmail
+SMTP requires a Google App Password (with 2-Step Verification enabled), not
+your regular Gmail password. Alternatively, configure `RESEND_API_KEY`,
+`SMTP_FROM` using an address on a domain verified in Resend, and `WEB_APP_URL`;
+the API sends through Resend over HTTPS and does not require SMTP credentials.
+To enable
 Google sign-in, uncomment and fill all three Google OAuth variables and set
 `GOOGLE_CALLBACK_URL` to the web callback URL `/auth/callback`, then register it
 in Google Cloud. `CLOUDINARY_URL` is needed when upload
 endpoints are enabled. Do not commit `.env` or expose backend secrets in the
 browser.
+
+### Render deployment
+
+Configure the API web service with these values:
+
+- **Root Directory:** `apps/api`
+- **Build Command:** `pnpm install --frozen-lockfile && pnpm build`
+- **Start Command:** `pnpm start:prod`
+- **Health Check Path:** `/health`
+
+The build command must run before `start:prod`; NestJS writes the entry point to
+`dist/main.js`. The production start script applies pending PostgreSQL migrations
+before starting NestJS, so the API does not accept requests against an outdated
+schema. If the service starts with `Cannot find module
+'.../apps/api/dist/main.js'`, check that Render is using this root directory and
+that its latest deploy actually completed the build command. Do not set the
+start command to `node dist/main.js` from the repository root.
+
+Set the production environment variables required by `validateEnvironment`,
+including `DATABASE_URL`, `JWT_ACCESS_SECRET`, `CORS_ORIGIN`,
+`WEB_APP_URL`, and `CLOUDINARY_URL`. For email, configure either
+`RESEND_API_KEY` and `SMTP_FROM` (an address on a verified Resend domain), or all
+SMTP variables: `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`,
+`SMTP_PASSWORD`, and `SMTP_FROM`. Render supplies `PORT`; the API listens on it
+automatically. Set `CORS_ORIGIN` to the exact production web origin (for
+example, `https://your-web-service.onrender.com`), not `http://localhost:3000`.
 
 The API listens on port `4000` by default. `CORS_ORIGIN` is a comma-separated
 allowlist; set it to the exact web origins that should be allowed.

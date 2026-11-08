@@ -43,10 +43,11 @@ export class AuthController {
     );
     return {
       authenticated: false,
+      accountCreated: true,
       verificationEmailSent,
       message: verificationEmailSent
-        ? 'Tài khoản đã được tạo. Hãy kiểm tra email để xác thực trước khi đăng nhập.'
-        : 'Tài khoản đã được tạo nhưng email xác thực chưa gửi được. Resend có thể đang ở chế độ thử nghiệm; hãy xác minh domain gửi email rồi bấm gửi lại bên dưới.',
+        ? 'Tài khoản đã được tạo. Hãy kiểm tra hộp thư đến và thư rác để xác thực trước khi đăng nhập.'
+        : 'Tài khoản đã được tạo nhưng email xác thực chưa gửi được. Hãy kiểm tra cấu hình gửi email trên máy chủ, sau đó bấm “Gửi lại email xác thực”. Tài khoản chưa thể đăng nhập trước khi xác thực.',
       user: { id: user.id, email: user.email },
     };
   }
@@ -89,7 +90,7 @@ export class AuthController {
     await this.auth.resendVerification(body.email);
     return {
       message:
-        'Nếu tài khoản cần xác thực, hướng dẫn sẽ được gửi đến email đã đăng ký.',
+        'Nếu tài khoản cần xác thực, hướng dẫn sẽ được gửi đến email đã đăng ký. Hãy kiểm tra cả hộp thư rác.',
     };
   }
 

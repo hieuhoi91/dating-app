@@ -12,7 +12,7 @@ import {
   createHash,
   randomBytes,
 } from 'node:crypto';
-import { DataSource, IsNull, QueryFailedError, Repository } from 'typeorm';
+import { DataSource, IsNull, Not, QueryFailedError, Repository } from 'typeorm';
 import { EmailToken, type EmailTokenType } from '../database/entities/email-token.entity.js';
 import { Profile } from '../database/entities/profile.entity.js';
 import { RefreshSession } from '../database/entities/refresh-session.entity.js';
@@ -114,9 +114,10 @@ export class AuthService {
       await this.mailer.sendVerificationEmail(user.email, rawToken);
       return { user, verificationEmailSent: true };
     } catch (error) {
+      const details = this.getMailerFailureDetails(error);
       this.logger.error(
         'Account was created, but its verification email could not be sent.',
-        error instanceof Error ? error.name : 'Unknown email delivery error',
+        details,
       );
       return { user, verificationEmailSent: false };
     }
@@ -149,12 +150,13 @@ export class AuthService {
     try {
       await this.sendEmailToken(user, 'verification', VERIFICATION_TTL_MS);
     } catch (error) {
+      const details = this.getMailerFailureDetails(error);
       this.logger.error(
         'Could not resend an account verification email.',
-        error instanceof Error ? error.name : 'Unknown email delivery error',
+        details,
       );
       throw new ServiceUnavailableException(
-        'Không gửi được email xác thực. Resend có thể đang ở chế độ thử nghiệm: hãy xác minh domain gửi email và dùng địa chỉ gửi thuộc domain đó, sau đó thử gửi lại.',
+        this.getVerificationDeliveryHelp(),
       );
     }
   }
@@ -403,16 +405,13 @@ export class AuthService {
     expiresInMs: number,
   ): Promise<void> {
     const rawToken = this.createRawToken();
+    const tokenHash = this.hashToken(rawToken);
     await this.dataSource.transaction(async (manager) => {
       const tokens = manager.getRepository(EmailToken);
-      await tokens.update(
-        { userId: user.id, type, consumedAt: IsNull() },
-        { consumedAt: new Date() },
-      );
       await tokens.save(
         tokens.create({
           userId: user.id,
-          tokenHash: this.hashToken(rawToken),
+          tokenHash,
           type,
           expiresAt: new Date(Date.now() + expiresInMs),
           consumedAt: null,
@@ -420,11 +419,53 @@ export class AuthService {
       );
     });
 
-    if (type === 'verification') {
-      await this.mailer.sendVerificationEmail(user.email, rawToken);
-    } else {
-      await this.mailer.sendPasswordResetEmail(user.email, rawToken);
+    try {
+      if (type === 'verification') {
+        await this.mailer.sendVerificationEmail(user.email, rawToken);
+      } else {
+        await this.mailer.sendPasswordResetEmail(user.email, rawToken);
+      }
+    } catch (error) {
+      await this.emailTokens.delete({ tokenHash, type });
+      throw error;
     }
+
+    await this.emailTokens.update(
+      { userId: user.id, type, consumedAt: IsNull(), tokenHash: Not(tokenHash) },
+      { consumedAt: new Date() },
+    );
+  }
+
+  private getMailerFailureDetails(error: unknown): string {
+    if (!error || typeof error !== 'object') return 'Unknown email delivery error';
+    const detail = error as {
+      name?: unknown;
+      code?: unknown;
+      responseCode?: unknown;
+      status?: unknown;
+    };
+    const values = [
+      typeof detail.name === 'string' ? detail.name : undefined,
+      typeof detail.code === 'string' ? `code=${detail.code}` : undefined,
+      typeof detail.responseCode === 'number'
+        ? `smtp=${detail.responseCode}`
+        : undefined,
+      typeof detail.status === 'number' ? `http=${detail.status}` : undefined,
+    ].filter(Boolean);
+    return values.join(' ') || 'Unknown email delivery error';
+  }
+
+  private getVerificationDeliveryHelp(): string {
+    if (this.config.get<string>('RESEND_API_KEY')) {
+      return 'Không gửi được email xác thực qua Resend. Hãy kiểm tra RESEND_API_KEY và xác minh domain gửi trong Resend; địa chỉ SMTP_FROM phải thuộc domain đã xác minh.';
+    }
+
+    const smtpHost = this.config.get<string>('SMTP_HOST')?.toLowerCase();
+    if (smtpHost === 'smtp.gmail.com') {
+      return 'Không gửi được email xác thực qua Gmail. SMTP_USER phải là địa chỉ Gmail và SMTP_PASSWORD phải là Mật khẩu ứng dụng (bật xác minh 2 bước trước); không dùng mật khẩu đăng nhập Gmail. Nếu vẫn lỗi trên Render, hãy dùng Resend API qua HTTPS.';
+    }
+
+    return 'Không gửi được email xác thực. Hãy kiểm tra SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASSWORD, SMTP_FROM và WEB_APP_URL trên môi trường triển khai.';
   }
 
   private createRawToken(): string {

@@ -74,16 +74,44 @@ export function validateEnvironment(
     'SMTP_PASSWORD',
     'SMTP_FROM',
   ] as const;
+  const resendApiKey = environment.RESEND_API_KEY;
+  const useResendApi =
+    typeof resendApiKey === 'string' && resendApiKey.trim() !== '';
   const configuredSmtpKeys = smtpKeys.filter((key) => {
     const value = environment[key];
     return typeof value === 'string' && value.trim() !== '';
   });
-  if (configuredSmtpKeys.length > 0 && configuredSmtpKeys.length !== smtpKeys.length) {
+  if (
+    !useResendApi &&
+    configuredSmtpKeys.length > 0 &&
+    configuredSmtpKeys.length !== smtpKeys.length
+  ) {
     const missing = smtpKeys.filter((key) => !configuredSmtpKeys.includes(key));
     throw new Error(`SMTP configuration is incomplete. Missing: ${missing.join(', ')}.`);
   }
   const smtpPort = environment.SMTP_PORT;
-  if (configuredSmtpKeys.length === smtpKeys.length) {
+  if (useResendApi || configuredSmtpKeys.length === smtpKeys.length) {
+    if (
+      typeof environment.SMTP_FROM !== 'string' ||
+      environment.SMTP_FROM.trim() === ''
+    ) {
+      throw new Error('SMTP_FROM is required when email delivery is configured.');
+    }
+    if (
+      typeof environment.WEB_APP_URL !== 'string' ||
+      environment.WEB_APP_URL.trim() === ''
+    ) {
+      throw new Error('WEB_APP_URL is required when email delivery is configured.');
+    }
+    const webAppUrl = new URL(String(environment.WEB_APP_URL));
+    if (
+      !['http:', 'https:'].includes(webAppUrl.protocol) ||
+      webAppUrl.origin !== environment.WEB_APP_URL
+    ) {
+      throw new Error('WEB_APP_URL must be an origin such as https://example.com.');
+    }
+  }
+  if (!useResendApi && configuredSmtpKeys.length === smtpKeys.length) {
     const parsedSmtpPort = Number(smtpPort);
     if (!Number.isInteger(parsedSmtpPort) || parsedSmtpPort < 1 || parsedSmtpPort > 65535) {
       throw new Error('SMTP_PORT must be a valid TCP port.');
@@ -92,16 +120,6 @@ export function validateEnvironment(
       throw new Error('SMTP_SECURE must be true or false.');
     }
     environment.SMTP_PORT = parsedSmtpPort;
-    for (const key of ['WEB_APP_URL'] as const) {
-      const value = environment[key];
-      if (typeof value !== 'string') {
-        throw new Error(`${key} is required when SMTP is configured.`);
-      }
-      const url = new URL(value);
-      if (!['http:', 'https:'].includes(url.protocol) || url.origin !== value) {
-        throw new Error(`${key} must be an origin such as https://example.com.`);
-      }
-    }
   }
 
   const googleKeys = [
@@ -148,6 +166,8 @@ export function validateEnvironment(
     PORT: port,
     DATABASE_POOL_MAX: databasePoolMax,
     AUTH_COOKIE_SAME_SITE: sameSite,
-    ...(configuredSmtpKeys.length > 0 ? { SMTP_PORT: Number(smtpPort) } : {}),
+    ...(!useResendApi && configuredSmtpKeys.length > 0
+      ? { SMTP_PORT: Number(smtpPort) }
+      : {}),
   };
 }

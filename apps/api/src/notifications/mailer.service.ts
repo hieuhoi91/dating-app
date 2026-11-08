@@ -47,8 +47,30 @@ export class MailerService implements OnModuleDestroy {
     text: string;
     html: string;
   }): Promise<void> {
-    const transporter = this.getTransporter();
+    const resendApiKey = this.config.get<string>('RESEND_API_KEY');
     const from = this.requireConfig('SMTP_FROM');
+    if (resendApiKey) {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${resendApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ from, ...message }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!response.ok) {
+        throw Object.assign(
+          new Error(
+            `Resend email API rejected the message (HTTP ${response.status}).`,
+          ),
+          { status: response.status },
+        );
+      }
+      return;
+    }
+
+    const transporter = this.getTransporter();
     await transporter.sendMail({ from, ...message });
   }
 
