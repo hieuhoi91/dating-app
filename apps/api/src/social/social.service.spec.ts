@@ -109,8 +109,7 @@ describe('SocialService', () => {
       .mockResolvedValueOnce([{ viewed_today: 19 }])
       .mockResolvedValueOnce([
         { id: 'last-profile', interests: [], photo_urls: [] },
-      ])
-      .mockResolvedValueOnce([]);
+      ]);
 
     const result = await social.getDiscovery('user-id', { limit: 20 });
 
@@ -127,13 +126,89 @@ describe('SocialService', () => {
       'discovery_unblock_history',
     );
     expect(managerQuery.mock.calls[4]?.[0]).toContain('THEN 0.5 ELSE 1.0 END');
+    expect(managerQuery).toHaveBeenCalledTimes(5);
+    expect(result.profiles).toHaveLength(1);
+    expect(result.discovery).toMatchObject({
+      viewed_today: 19,
+      remaining: 1,
+    });
+  });
+
+  it('records a view only when the profile is actually opened', async () => {
+    dataSource.transaction.mockImplementation(
+      async (callback: (manager: { query: typeof managerQuery }) => unknown) =>
+        callback({ query: managerQuery }),
+    );
+    managerQuery
+      .mockResolvedValueOnce([{ user_id: 'viewer' }])
+      .mockResolvedValueOnce([{ user_id: 'target' }])
+      .mockResolvedValueOnce([
+        { is_unlimited: false, resets_at: new Date('2026-11-09T00:00:00.000Z') },
+      ])
+      .mockResolvedValueOnce([{ viewed_today: 0 }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    await expect(
+      social.recordDiscoveryView('viewer', 'target'),
+    ).resolves.toMatchObject({
+      recorded: true,
+      discovery: { viewed_today: 1, remaining: 19 },
+    });
     expect(managerQuery.mock.calls[5]?.[0]).toContain(
       'INSERT INTO discovery_impressions',
     );
-    expect(result.profiles).toHaveLength(1);
+  });
+
+  it('does not record a new view after reaching the daily limit', async () => {
+    dataSource.transaction.mockImplementation(
+      async (callback: (manager: { query: typeof managerQuery }) => unknown) =>
+        callback({ query: managerQuery }),
+    );
+    managerQuery
+      .mockResolvedValueOnce([{ user_id: 'viewer' }])
+      .mockResolvedValueOnce([{ user_id: 'target' }])
+      .mockResolvedValueOnce([
+        { is_unlimited: false, resets_at: new Date('2026-11-09T00:00:00.000Z') },
+      ])
+      .mockResolvedValueOnce([{ viewed_today: 20 }])
+      .mockResolvedValueOnce([]);
+
+    await expect(
+      social.recordDiscoveryView('viewer', 'target'),
+    ).resolves.toMatchObject({
+      recorded: false,
+      discovery: { viewed_today: 20, remaining: 0 },
+    });
+    expect(managerQuery).toHaveBeenCalledTimes(5);
+  });
+
+  it('does not count profiles fetched but not opened', async () => {
+    query.mockResolvedValueOnce([{ user_id: 'user-id' }]).mockResolvedValueOnce([]);
+    dataSource.transaction.mockImplementation(
+      async (callback: (manager: { query: typeof managerQuery }) => unknown) =>
+        callback({ query: managerQuery }),
+    );
+    managerQuery
+      .mockResolvedValueOnce([{ user_id: 'user-id' }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { is_unlimited: false, resets_at: new Date('2026-11-09T00:00:00.000Z') },
+      ])
+      .mockResolvedValueOnce([{ viewed_today: 0 }])
+      .mockResolvedValueOnce([
+        { id: 'not-opened', interests: [], photo_urls: [] },
+      ]);
+
+    const result = await social.getDiscovery('user-id', { limit: 20 });
+
+    expect(managerQuery).toHaveBeenCalledTimes(5);
+    expect(managerQuery.mock.calls.some(([sql]) =>
+      String(sql).includes('INSERT INTO discovery_impressions'),
+    )).toBe(false);
     expect(result.discovery).toMatchObject({
-      viewed_today: 20,
-      remaining: 0,
+      viewed_today: 0,
+      remaining: 20,
     });
   });
 

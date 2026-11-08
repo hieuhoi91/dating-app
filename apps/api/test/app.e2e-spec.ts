@@ -33,7 +33,10 @@ describe('AppController (e2e)', () => {
         id: 'user-id',
         email: 'person@example.com',
       },
-      verificationEmailSent: true,
+      tokens: {
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      },
     });
     const moduleFixture: TestingModule = await Test.createTestingModule({
       controllers: [AppController, AuthController],
@@ -63,16 +66,15 @@ describe('AppController (e2e)', () => {
       .expect({ status: 'ok', database: 'ok' });
   });
 
-  it('creates an account and asks the user to verify their email', async () => {
+  it('creates an account, authenticates it, and returns auth cookies without email verification', async () => {
     const response = await request(app.getHttpServer())
       .post('/auth/register')
       .send({ email: 'person@example.com', password: 'a-strong-password' })
       .expect(201)
       .expect({
-        authenticated: false,
-        verificationEmailSent: true,
-        message:
-          'Tài khoản đã được tạo. Hãy kiểm tra email để xác thực trước khi đăng nhập.',
+        authenticated: true,
+        accountCreated: true,
+        message: 'Đăng ký thành công. Hãy hoàn tất hồ sơ của bạn.',
         user: { id: 'user-id', email: 'person@example.com' },
       });
 
@@ -80,29 +82,7 @@ describe('AppController (e2e)', () => {
       'person@example.com',
       'a-strong-password',
     );
-    expect(response.headers['set-cookie']).toBeUndefined();
-  });
-
-  it('explains that an account was created when its verification email could not be sent', async () => {
-    auth.register.mockResolvedValueOnce({
-      user: {
-        id: 'user-id',
-        email: 'person@example.com',
-      },
-      verificationEmailSent: false,
-    });
-
-    await request(app.getHttpServer())
-      .post('/auth/register')
-      .send({ email: 'person@example.com', password: 'a-strong-password' })
-      .expect(201)
-      .expect({
-        authenticated: false,
-        verificationEmailSent: false,
-        message:
-          'Tài khoản đã được tạo nhưng email xác thực chưa gửi được. Resend có thể đang ở chế độ thử nghiệm; hãy xác minh domain gửi email rồi bấm gửi lại bên dưới.',
-        user: { id: 'user-id', email: 'person@example.com' },
-      });
+    expect(response.headers['set-cookie']).toHaveLength(2);
   });
 
   it('rejects malformed registration data before calling the auth service', async () => {

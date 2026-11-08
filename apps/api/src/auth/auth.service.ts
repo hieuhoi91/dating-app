@@ -52,10 +52,9 @@ export class AuthService {
   async register(
     emailInput: string,
     password: string,
-  ): Promise<{ user: User; verificationEmailSent: boolean }> {
+  ): Promise<{ user: User; tokens: AuthTokens }> {
     const email = emailInput.trim().toLowerCase();
     const passwordHash = await hashPassword(password);
-    const rawToken = this.createRawToken();
 
     let user: User;
     try {
@@ -63,8 +62,9 @@ export class AuthService {
         const users = manager.getRepository(User);
         const profiles = manager.getRepository(Profile);
         const personalData = manager.getRepository(UserPersonalData);
-        const emailTokens = manager.getRepository(EmailToken);
-        const createdUser = await users.save(users.create({ email, passwordHash }));
+        const createdUser = await users.save(
+          users.create({ email, passwordHash, emailVerified: true }),
+        );
         await profiles.save(
           profiles.create({
             userId: createdUser.id,
@@ -84,43 +84,18 @@ export class AuthService {
             longitude: null,
           }),
         );
-        await emailTokens.save(
-          emailTokens.create({
-            userId: createdUser.id,
-            tokenHash: this.hashToken(rawToken),
-            type: 'verification',
-            expiresAt: new Date(Date.now() + VERIFICATION_TTL_MS),
-            consumedAt: null,
-          }),
-        );
         return createdUser;
       });
     } catch (error) {
       if (this.isUniqueViolation(error)) {
-        const existingUser = await this.users.findOneBy({ email });
-        if (existingUser && !existingUser.emailVerified) {
-          throw new ConflictException(
-            'Email này đã được đăng ký nhưng chưa xác thực. Hãy dùng nút gửi lại email xác thực bên dưới.',
-          );
-        }
         throw new ConflictException(
-          'Gmail này đã có tài khoản. Hãy đăng nhập bằng tài khoản đó hoặc chọn Quên mật khẩu nếu bạn không nhớ mật khẩu.',
+          'Gmail này đã tồn tại. Hãy đăng nhập bằng tài khoản đó hoặc chọn Quên mật khẩu nếu bạn không nhớ mật khẩu.',
         );
       }
       throw error;
     }
 
-    try {
-      await this.mailer.sendVerificationEmail(user.email, rawToken);
-      return { user, verificationEmailSent: true };
-    } catch (error) {
-      const details = this.getMailerFailureDetails(error);
-      this.logger.error(
-        'Account was created, but its verification email could not be sent.',
-        details,
-      );
-      return { user, verificationEmailSent: false };
-    }
+    return { user, tokens: await this.createSession(user) };
   }
 
   async login(emailInput: string, password: string): Promise<{ user: User; tokens: AuthTokens }> {
@@ -133,11 +108,6 @@ export class AuthService {
     );
     if (!user || !passwordMatches) {
       throw new UnauthorizedException('Email hoặc mật khẩu không chính xác.');
-    }
-    if (!user.emailVerified) {
-      throw new UnauthorizedException(
-        'Vui lòng xác thực email trước khi đăng nhập.',
-      );
     }
     return { user, tokens: await this.createSession(user) };
   }

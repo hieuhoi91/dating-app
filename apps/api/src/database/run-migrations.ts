@@ -10,6 +10,7 @@ import { AddMessageAttachments1762690000000 } from './migrations/1762690000000-A
 import { AllowRematchesAfterBlocking1762700000000 } from './migrations/1762700000000-AllowRematchesAfterBlocking.js';
 import { CleanBlockedRelationships1762710000000 } from './migrations/1762710000000-CleanBlockedRelationships.js';
 import { AddDailyDiscoveryQuota1762720000000 } from './migrations/1762720000000-AddDailyDiscoveryQuota.js';
+import { ResetLegacyDiscoveryImpressions1762730000000 } from './migrations/1762730000000-ResetLegacyDiscoveryImpressions.js';
 
 async function runMigrations() {
   const databaseUrl = process.env.DATABASE_URL;
@@ -42,6 +43,7 @@ async function runMigrations() {
       AllowRematchesAfterBlocking1762700000000,
       CleanBlockedRelationships1762710000000,
       AddDailyDiscoveryQuota1762720000000,
+      ResetLegacyDiscoveryImpressions1762730000000,
     ],
     migrationsTableName: 'typeorm_migrations',
     extra: {

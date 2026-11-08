@@ -19,6 +19,7 @@ import type { User } from '../database/entities/user.entity.js';
 import {
   BlockDto,
   DiscoveryQueryDto,
+  DiscoveryViewDto,
   LikeDto,
   MessagesQueryDto,
   PreferencesPatchDto,
@@ -88,6 +89,15 @@ export class SocialController {
     @Query() query: DiscoveryQueryDto,
   ) {
     return this.social.getDiscovery(user.id, query);
+  }
+
+  @Post('discovery/views')
+  @HttpCode(200)
+  recordDiscoveryView(
+    @CurrentUser() user: User,
+    @Body() input: DiscoveryViewDto,
+  ) {
+    return this.social.recordDiscoveryView(user.id, input.targetUserId);
   }
 
   @Get('likes')

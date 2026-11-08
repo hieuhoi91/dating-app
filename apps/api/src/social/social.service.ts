@@ -512,21 +512,105 @@ export class SocialService {
                 isUnlimited,
               ],
             );
-      if (!isUnlimited && profiles.length) {
+      return {
+        profiles,
+        discovery: {
+          unlimited: isUnlimited,
+          daily_limit: isUnlimited ? null : 20,
+          viewed_today: isUnlimited ? null : viewedToday,
+          remaining: isUnlimited
+            ? null
+            : Math.max(0, 20 - viewedToday),
+          resets_at: isUnlimited ? null : subscription?.resets_at,
+        },
+      };
+    });
+  }
+
+  async recordDiscoveryView(userId: string, targetUserId: string) {
+    if (userId === targetUserId) {
+      throw new BadRequestException('You cannot view your own profile.');
+    }
+    return this.dataSource.transaction(async (manager) => {
+      await manager.query(
+        'SELECT user_id FROM profiles WHERE user_id = $1 FOR UPDATE',
+        [userId],
+      );
+      const [targetProfile] = await manager.query<Array<{ user_id: string }>>(
+        `SELECT p.user_id
+         FROM profiles p
+         LEFT JOIN user_preferences preferences ON preferences.user_id = p.user_id
+         WHERE p.user_id = $1 AND p.is_complete = true
+           AND p.profile_visibility = 'discoverable'
+           AND COALESCE(preferences.discovery_enabled, true) = true
+           AND NOT EXISTS (
+             SELECT 1 FROM matches m WHERE m.status = 'active'
+               AND ((m.user_low_id = $2 AND m.user_high_id = p.user_id)
+                 OR (m.user_high_id = $2 AND m.user_low_id = p.user_id))
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM blocks b
+             WHERE (b.blocker_id = $2 AND b.blocked_id = p.user_id)
+                OR (b.blocker_id = p.user_id AND b.blocked_id = $2)
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM likes l
+             WHERE l.from_user_id = $2 AND l.to_user_id = p.user_id
+           )`,
+        [targetUserId, userId],
+      );
+      if (!targetProfile) {
+        throw new NotFoundException('Profile is not available.');
+      }
+
+      const [subscription] = await manager.query<
+        Array<{ is_unlimited: boolean; resets_at: Date }>
+      >(
+        `SELECT EXISTS (
+           SELECT 1 FROM user_subscriptions
+           WHERE user_id = $1 AND status = 'active'
+             AND lower(plan_code) NOT IN ('free', 'basic')
+             AND (starts_at IS NULL OR starts_at <= now())
+             AND (expires_at IS NULL OR expires_at > now())
+         ) AS is_unlimited,
+         ((timezone('Asia/Ho_Chi_Minh', now())::date + 1)::timestamp
+           AT TIME ZONE 'Asia/Ho_Chi_Minh') AS resets_at`,
+        [userId],
+      );
+      const isUnlimited = subscription?.is_unlimited ?? false;
+      const [usage] = isUnlimited
+        ? [{ viewed_today: null }]
+        : await manager.query<Array<{ viewed_today: number }>>(
+            `SELECT count(*)::int AS viewed_today
+             FROM discovery_impressions
+             WHERE user_id = $1
+               AND impression_date = timezone('Asia/Ho_Chi_Minh', now())::date`,
+            [userId],
+          );
+      const viewedToday = usage?.viewed_today ?? 0;
+      const [existingView] = isUnlimited
+        ? [{ target_user_id: targetUserId }]
+        : await manager.query<Array<{ target_user_id: string }>>(
+            `SELECT target_user_id
+             FROM discovery_impressions
+             WHERE user_id = $1 AND target_user_id = $2
+               AND impression_date = timezone('Asia/Ho_Chi_Minh', now())::date`,
+            [userId, targetUserId],
+          );
+      const recorded = Boolean(existingView) || isUnlimited || viewedToday < 20;
+      if (recorded && !existingView && !isUnlimited) {
         await manager.query(
           `INSERT INTO discovery_impressions
              (user_id, target_user_id, impression_date)
-           SELECT $1, target_user_id,
-                  timezone('Asia/Ho_Chi_Minh', now())::date
-           FROM unnest($2::uuid[]) AS selected(target_user_id)
+           VALUES ($1, $2, timezone('Asia/Ho_Chi_Minh', now())::date)
            ON CONFLICT DO NOTHING`,
-          [userId, profiles.map((profile) => profile.id)],
+          [userId, targetUserId],
         );
       }
       const viewedAfterResponse =
-        viewedToday + (isUnlimited ? 0 : profiles.length);
+        viewedToday + (recorded && !existingView && !isUnlimited ? 1 : 0);
       return {
-        profiles,
+        recorded,
         discovery: {
           unlimited: isUnlimited,
           daily_limit: isUnlimited ? null : 20,

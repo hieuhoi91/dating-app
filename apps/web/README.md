@@ -10,7 +10,10 @@ origin reachable by the Next.js server; it is server-only and must not use a
 origin, for example `https://your-api-service.onrender.com`, not `localhost`.
 Set `NEXT_PUBLIC_NEST_API_URL` to the browser-reachable API origin for Socket.IO,
 and `WEB_APP_ORIGIN` to the deployed web origin so NestJS can validate
-cookie-authenticated mutations.
+cookie-authenticated mutations. Use the same origin (scheme and host, with no
+trailing slash) in the API's `CORS_ORIGIN`; the web proxy forwards that
+canonical origin for cookie-authenticated requests while rejecting
+cross-origin mutations.
 
 All `/api/*` REST requests are forwarded to NestJS, and the authenticated
 Socket.IO client connects to the API's `/realtime` namespace. The socket token

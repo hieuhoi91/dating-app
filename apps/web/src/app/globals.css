@@ -7769,12 +7769,6 @@ html[data-season='winter'] .falling-petal {
   color: #9b4545;
   background: #fbefef;
 }
-.auth-message-warning {
-  align-items: flex-start;
-  color: #805c1e;
-  background: #fbf3df;
-  line-height: 1.6;
-}
 .auth-message > svg {
   flex: 0 0 auto;
 }

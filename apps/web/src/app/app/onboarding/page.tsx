@@ -55,6 +55,7 @@ export default function OnboardingPage() {
   const [selectedPhoto, setSelectedPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState('');
   const [error, setError] = useState('');
+  const [registrationNotice, setRegistrationNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [profileDateOfBirthAvailable, setProfileDateOfBirthAvailable] =
@@ -63,6 +64,12 @@ export default function OnboardingPage() {
   const router = useRouter();
 
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('registered') === '1') {
+      setRegistrationNotice(
+        'Đăng ký thành công. Hãy hoàn tất hồ sơ để bắt đầu sử dụng.',
+      );
+    }
+
     let active = true;
     async function load() {
       try {
@@ -252,6 +259,11 @@ export default function OnboardingPage() {
           </div>
         </div>
         <section className="onboarding-card" aria-busy={busy}>
+          {registrationNotice && (
+            <p className="auth-message" role="status">
+              {registrationNotice}
+            </p>
+          )}
           {step === 0 && (
             <>
               <span className="eyebrow">BƯỚC 1 · THÔNG TIN CƠ BẢN</span>

@@ -7,7 +7,6 @@ import { ArrowLeft, ArrowRight, BadgeCheck, CircleAlert, Heart, LockKeyhole, Mai
 
 type AuthResponse = {
   authenticated?: boolean;
-  verificationEmailSent?: boolean;
   url?: string;
   error?: unknown;
   message?: unknown;
@@ -51,9 +50,7 @@ export default function AuthForm({
   const [mode, setMode] = useState(initialMode);
   const [message, setMessage] = useState(initialError);
   const [messageIsError, setMessageIsError] = useState(Boolean(initialError));
-  const [messageIsWarning, setMessageIsWarning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [verificationEmail, setVerificationEmail] = useState("");
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -79,72 +76,16 @@ export default function AuthForm({
             ? "Không thể tạo tài khoản. Vui lòng kiểm tra thông tin và thử lại."
             : "Không thể đăng nhập. Vui lòng thử lại.",
         );
-        if (
-          (mode === "register" && response.status === 409 &&
-            errorMessage.includes("chưa xác thực")) ||
-          (mode === "login" && errorMessage.includes("xác thực"))
-        ) {
-          setVerificationEmail(email);
-        }
         throw new Error(errorMessage);
       }
-      if (mode === "register" && !result.authenticated) {
-        setMessage(
-          getResponseMessage(
-            result,
-            "Tài khoản đã được tạo. Hãy kiểm tra email để xác thực.",
-          ),
-        );
-        setMessageIsError(false);
-        setMessageIsWarning(!result.verificationEmailSent);
-        setVerificationEmail(email);
-      } else if (mode === "register") {
-        router.push("/app/onboarding");
+      if (mode === "register") {
+        router.replace("/app/onboarding?registered=1");
       } else {
         window.location.replace(redirectTo);
       }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Không thể kết nối đến máy chủ.");
       setMessageIsError(true);
-      setMessageIsWarning(false);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const resendVerification = async () => {
-    if (!verificationEmail || isSubmitting) return;
-    setIsSubmitting(true);
-    setMessage("");
-    setMessageIsWarning(false);
-    try {
-      const response = await fetch("/api/auth/verification/resend", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: verificationEmail }),
-      });
-      const result = await readAuthResponse(response);
-      if (!response.ok) {
-        throw new Error(
-          getResponseMessage(result, "Không gửi được email xác thực."),
-        );
-      }
-      setMessage(
-        getResponseMessage(
-          result,
-          "Nếu tài khoản cần xác thực, hướng dẫn đã được gửi. Hãy kiểm tra cả thư rác.",
-        ),
-      );
-      setMessageIsError(false);
-      setMessageIsWarning(false);
-    } catch (error) {
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "Không gửi được email xác thực.",
-      );
-      setMessageIsError(true);
-      setMessageIsWarning(false);
     } finally {
       setIsSubmitting(false);
     }
@@ -159,7 +100,6 @@ export default function AuthForm({
     }
     setIsSubmitting(true);
     setMessage("");
-    setMessageIsWarning(false);
     try {
       const response = await fetch("/api/auth/password-reset", {
         method: "POST",
@@ -177,11 +117,9 @@ export default function AuthForm({
         ),
       );
       setMessageIsError(false);
-      setMessageIsWarning(false);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Không thể kết nối đến máy chủ.");
       setMessageIsError(true);
-      setMessageIsWarning(false);
     } finally {
       setIsSubmitting(false);
     }
@@ -190,7 +128,6 @@ export default function AuthForm({
   const signInWithGoogle = async () => {
     setIsSubmitting(true);
     setMessage("");
-    setMessageIsWarning(false);
     try {
       const response = await fetch("/api/auth/google", { method: "POST" });
       const result = await readAuthResponse(response);
@@ -204,7 +141,6 @@ export default function AuthForm({
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Không thể kết nối đến máy chủ.");
       setMessageIsError(true);
-      setMessageIsWarning(false);
       setIsSubmitting(false);
     }
   };
@@ -215,10 +151,9 @@ export default function AuthForm({
       <div className="auth-layout">
         <section className="auth-story"><div className="auth-story-photo" /><div className="auth-story-overlay" /><div className="auth-story-copy"><span className="eyebrow">MỘT CHÚT GẦN HƠN, MỖI NGÀY</span><h1>Những điều<br />đẹp đẽ thường<br /><em>bắt đầu thật khẽ.</em></h1><p>Chỉ cần là chính mình. Phần còn lại, hãy để kết nối dẫn lối.</p><div className="auth-proof"><span><ShieldCheck size={17} /></span><div><strong>Riêng tư và an toàn</strong><small>Bạn luôn lựa chọn điều mình chia sẻ.</small></div></div></div><div className="auth-story-footer">GẶP GỠ THẬT LÒNG <span>✳</span> TÌM HIỂU CHẬM RÃI</div></section>
         <section className="auth-form-wrap"><div className="auth-form-card"><span className="eyebrow">{mode === "register" ? "BẮT ĐẦU HÀNH TRÌNH CỦA BẠN" : "RẤT VUI KHI BẠN QUAY LẠI"}</span><h2>{mode === "register" ? <>Một lời chào<br /><em>đang chờ bạn.</em></> : <>Chào mừng<br /><em>bạn trở lại.</em></>}</h2><p className="auth-description">{mode === "register" ? "Tạo tài khoản để gặp gỡ những người khiến bạn muốn lắng nghe thêm." : "Đăng nhập để tiếp tục những kết nối đang chờ bạn."}</p>
-          <div className="auth-mode-tabs"><button type="button" className={mode === "register" ? "auth-mode-active" : ""} onClick={() => { setMode("register"); setMessage(""); setMessageIsError(false); setMessageIsWarning(false); }}>Tạo tài khoản</button><button type="button" className={mode === "login" ? "auth-mode-active" : ""} onClick={() => { setMode("login"); setMessage(""); setMessageIsError(false); setMessageIsWarning(false); }}>Đăng nhập</button></div>
+          <div className="auth-mode-tabs"><button type="button" className={mode === "register" ? "auth-mode-active" : ""} onClick={() => { setMode("register"); setMessage(""); setMessageIsError(false); }}>Tạo tài khoản</button><button type="button" className={mode === "login" ? "auth-mode-active" : ""} onClick={() => { setMode("login"); setMessage(""); setMessageIsError(false); }}>Đăng nhập</button></div>
           <form onSubmit={submit}><label className="form-label">Email<div className="input-with-icon"><Mail size={17} /><input name="email" type="email" placeholder="ten@email.com" autoComplete="email" required /></div></label><label className="form-label">Mật khẩu<div className="input-with-icon"><LockKeyhole size={17} /><input name="password" type="password" placeholder="Ít nhất 8 ký tự" minLength={8} autoComplete={mode === "register" ? "new-password" : "current-password"} required /></div></label>{mode === "register" && <label className="terms-check"><input type="checkbox" required /><span>Tôi đồng ý với <Link href="/#safety">Điều khoản sử dụng</Link> và <Link href="/#safety">Chính sách quyền riêng tư</Link>.</span></label>}{mode === "login" && <button type="button" className="forgot-link" disabled={isSubmitting} onClick={(event) => void resetPassword(event.currentTarget.form!)}>Quên mật khẩu?</button>}<button type="submit" className="button button-primary auth-submit" disabled={isSubmitting}>{isSubmitting ? "Đang xử lý..." : mode === "register" ? "Tạo tài khoản" : "Đăng nhập"} {!isSubmitting && <ArrowRight size={16} />}</button></form>
-          {message && <div className={`auth-message${messageIsError ? " auth-message-error" : messageIsWarning ? " auth-message-warning" : ""}`} role={messageIsError ? "alert" : "status"}>{messageIsError ? <CircleAlert size={16} /> : <BadgeCheck size={16} />}{message}</div>}
-          {verificationEmail && <button type="button" className="forgot-link" disabled={isSubmitting} onClick={() => void resendVerification()}>{isSubmitting ? "Đang gửi..." : "Gửi lại email xác thực"}</button>}
+          {message && <div className={`auth-message${messageIsError ? " auth-message-error" : ""}`} role={messageIsError ? "alert" : "status"}>{messageIsError ? <CircleAlert size={16} /> : <BadgeCheck size={16} />}{message}</div>}
           <div className="auth-divider"><span />hoặc<span /></div><button type="button" className="button button-social" disabled={isSubmitting} onClick={() => void signInWithGoogle()}><span className="google-g">G</span> Tiếp tục với Google</button><p className="auth-assurance"><LockKeyhole size={13} /> Thông tin của bạn được bảo vệ và giữ riêng tư.</p>
         </div></section>
       </div>

@@ -41,10 +41,25 @@ export async function forwardNestRequest(
   const target = new URL(endpoint, `${baseUrl.origin}/`);
   const incomingUrl = new URL(request.url);
   target.search = incomingUrl.search;
+  const requestOrigin = request.headers.get("origin");
+  if (
+    requestOrigin &&
+    requestOrigin !== incomingUrl.origin &&
+    !["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase())
+  ) {
+    return NextResponse.json(
+      { error: "Origin không được phép thực hiện yêu cầu này." },
+      { status: 403 },
+    );
+  }
+
   const headers = new Headers();
-  for (const name of ["authorization", "cookie", "content-type", "origin"]) {
+  for (const name of ["authorization", "cookie", "content-type"]) {
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
+  }
+  if (requestOrigin) {
+    headers.set("origin", process.env.WEB_APP_ORIGIN ?? requestOrigin);
   }
 
   try {

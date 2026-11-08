@@ -36,18 +36,19 @@ export class AuthController {
   @Post('register')
   @Public()
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  async register(@Body() credentials: CredentialsDto) {
-    const { user, verificationEmailSent } = await this.auth.register(
+  async register(
+    @Body() credentials: CredentialsDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const { user, tokens } = await this.auth.register(
       credentials.email,
       credentials.password,
     );
+    this.setAuthCookies(response, tokens);
     return {
-      authenticated: false,
+      authenticated: true,
       accountCreated: true,
-      verificationEmailSent,
-      message: verificationEmailSent
-        ? 'Tài khoản đã được tạo. Hãy kiểm tra hộp thư đến và thư rác để xác thực trước khi đăng nhập.'
-        : 'Tài khoản đã được tạo nhưng email xác thực chưa gửi được. Hãy kiểm tra cấu hình gửi email trên máy chủ, sau đó bấm “Gửi lại email xác thực”. Tài khoản chưa thể đăng nhập trước khi xác thực.',
+      message: 'Đăng ký thành công. Hãy hoàn tất hồ sơ của bạn.',
       user: { id: user.id, email: user.email },
     };
   }

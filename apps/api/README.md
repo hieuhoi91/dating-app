@@ -15,8 +15,10 @@ Currently implemented:
 - `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`, and
   `GET /auth/me` provide password authentication with short-lived JWT access
   cookies, rotating opaque refresh tokens, and scrypt password hashes.
-- Email verification and password reset use single-use, hashed PostgreSQL tokens
-  and either the SMTP or Resend settings configured in `.env`.
+- Password reset uses single-use, hashed PostgreSQL tokens and either SMTP or
+  Resend settings configured in `.env`. Email verification is temporarily
+  bypassed: password registration marks the account verified, creates a
+  session, and sends the user to onboarding.
 - Google OAuth uses a one-time state cookie and verified Google email; configure
   all Google client/callback variables to enable it.
 - `GET/PATCH /users/me` read and update the signed-in user's profile. Exact birth
@@ -25,6 +27,9 @@ Currently implemented:
   verification records and subscription records.
 - Social APIs provide preferences/settings, blocks/reports, discovery,
   Like/Match, conversations and messages.
+- `GET /api/discovery` fetches candidates without consuming daily views;
+  `POST /api/discovery/views` records a profile when it is shown. The migration
+  resets legacy impressions that were recorded merely by fetching the list.
 - Couple APIs provide invitations, overview, questions, challenges, plans,
   journal, memories, feed, media and location lookup.
 - Couple location search and reverse geocoding send the entered search term or
@@ -47,9 +52,9 @@ before horizontally scaling the API.
 
 PostgreSQL migrations create the identity, platform, social and Couple schemas.
 They do not import legacy users or application data, per the fresh-start choice.
-Email verification/password-reset via SMTP and Google OAuth are implemented in
-the API and connected through the web proxy. They require your own mailer and
-Google OAuth environment values. Register the web callback URL
+Password-reset email and Google OAuth are implemented in the API and connected
+through the web proxy. They require your own mailer and Google OAuth environment
+values. Register the web callback URL
 `https://<web-origin>/auth/callback` in Google Cloud; the web forwards callback
 requests to NestJS so auth cookies are set on the web origin.
 

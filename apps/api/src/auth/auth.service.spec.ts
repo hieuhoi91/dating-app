@@ -33,11 +33,11 @@ describe('AuthService registration conflicts', () => {
     return service;
   }
 
-  it('keeps a created account and reports when its verification email is rejected', async () => {
+  it('creates a verified account without sending verification email', async () => {
     const user = {
       id: 'new-user-id',
       email: 'person@example.com',
-      emailVerified: false,
+      emailVerified: true,
     };
     const repositories = new Map([
       [
@@ -61,13 +61,6 @@ describe('AuthService registration conflicts', () => {
           save: vi.fn().mockResolvedValue({}),
         },
       ],
-      [
-        EmailToken,
-        {
-          create: vi.fn((input) => input),
-          save: vi.fn().mockResolvedValue({}),
-        },
-      ],
     ]);
     const manager = {
       getRepository: vi.fn((entity: unknown) => repositories.get(entity as never)),
@@ -77,28 +70,108 @@ describe('AuthService registration conflicts', () => {
         callback(manager),
       ),
     };
-    const mailer = {
-      sendVerificationEmail: vi
-        .fn()
-        .mockRejectedValue(Object.assign(new Error('Recipient is not allowed'), {
-          responseCode: 550,
-        })),
+    const sessions = {
+      create: vi.fn((input) => input),
+      save: vi.fn().mockResolvedValue({}),
     };
+    const mailer = { sendVerificationEmail: vi.fn() };
     const service = new AuthService(
       dataSource as never,
-      {} as never,
-      {} as never,
+      { signAsync: vi.fn().mockResolvedValue('access-token') } as never,
+      { getOrThrow: vi.fn(() => 'secret') } as never,
       { findOneBy: vi.fn() } as never,
-      {} as never,
+      sessions as never,
       {} as never,
       mailer as never,
     );
 
     const result = await service.register('person@example.com', 'secure-password');
 
-    expect(result).toEqual({ user, verificationEmailSent: false });
+    expect(result.user).toEqual(user);
+    expect(result.tokens).toMatchObject({
+      accessToken: 'access-token',
+      refreshToken: expect.any(String),
+    });
     expect(repositories.get(User)?.save).toHaveBeenCalledTimes(1);
-    expect(mailer.sendVerificationEmail).toHaveBeenCalledTimes(1);
+    expect(repositories.get(User)?.create).toHaveBeenCalledWith(
+      expect.objectContaining({ emailVerified: true }),
+    );
+    expect(sessions.save).toHaveBeenCalledOnce();
+    expect(manager.getRepository).not.toHaveBeenCalledWith(EmailToken);
+    expect(mailer.sendVerificationEmail).not.toHaveBeenCalled();
+  });
+
+  it('uses the same login error for an unregistered email', async () => {
+    const service = new AuthService(
+      {} as never,
+      {} as never,
+      {} as never,
+      { findOneBy: vi.fn().mockResolvedValue(null) } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(
+      service.login('missing@example.com', 'secure-password'),
+    ).rejects.toMatchObject({
+      message: 'Email hoặc mật khẩu không chính xác.',
+    });
+  });
+
+  it('reports an incorrect password with the generic login error', async () => {
+    const { hashPassword } = await import('./utils/password-hasher.js');
+    const user = {
+      id: 'existing-user-id',
+      email: 'person@example.com',
+      passwordHash: await hashPassword('correct-password'),
+      emailVerified: true,
+    };
+    const service = new AuthService(
+      {} as never,
+      {} as never,
+      {} as never,
+      { findOneBy: vi.fn().mockResolvedValue(user) } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(
+      service.login('person@example.com', 'incorrect-password'),
+    ).rejects.toMatchObject({
+      message: 'Email hoặc mật khẩu không chính xác.',
+    });
+  });
+
+  it('allows an existing unverified account to sign in with its password', async () => {
+    const { hashPassword } = await import('./utils/password-hasher.js');
+    const user = {
+      id: 'old-user-id',
+      email: 'person@example.com',
+      passwordHash: await hashPassword('secure-password'),
+      emailVerified: false,
+    };
+    const sessions = {
+      create: vi.fn((input) => input),
+      save: vi.fn().mockResolvedValue({}),
+    };
+    const service = new AuthService(
+      {} as never,
+      { signAsync: vi.fn().mockResolvedValue('access-token') } as never,
+      { getOrThrow: vi.fn(() => 'secret') } as never,
+      { findOneBy: vi.fn().mockResolvedValue(user) } as never,
+      sessions as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(
+      service.login('person@example.com', 'secure-password'),
+    ).resolves.toMatchObject({
+      user,
+      tokens: { accessToken: 'access-token' },
+    });
   });
 
   describe('AuthService verification email resend', () => {
@@ -165,14 +238,14 @@ describe('AuthService registration conflicts', () => {
     });
   });
 
-  it('explains that an unverified account should use its sent verification email', async () => {
+  it('reports that an existing unverified email is already registered', async () => {
     const service = createService(false);
 
     await expect(
       service.register('person@example.com', 'secure-password'),
     ).rejects.toMatchObject({
       message:
-        'Email này đã được đăng ký nhưng chưa xác thực. Hãy dùng nút gửi lại email xác thực bên dưới.',
+        'Gmail này đã tồn tại. Hãy đăng nhập bằng tài khoản đó hoặc chọn Quên mật khẩu nếu bạn không nhớ mật khẩu.',
     });
   });
 
@@ -183,7 +256,7 @@ describe('AuthService registration conflicts', () => {
       service.register('person@example.com', 'secure-password'),
     ).rejects.toMatchObject({
       message:
-        'Gmail này đã có tài khoản. Hãy đăng nhập bằng tài khoản đó hoặc chọn Quên mật khẩu nếu bạn không nhớ mật khẩu.',
+        'Gmail này đã tồn tại. Hãy đăng nhập bằng tài khoản đó hoặc chọn Quên mật khẩu nếu bạn không nhớ mật khẩu.',
     });
   });
 

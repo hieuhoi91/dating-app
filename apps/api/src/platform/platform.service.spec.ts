@@ -35,7 +35,7 @@ describe('PlatformService profile photos', () => {
     );
   });
 
-  it('includes the other person profile on match and Couple notifications', async () => {
+  it('includes the other person profile on Like, Match and Couple notifications', async () => {
     const notifications = [
       {
         id: 'notification-id',
@@ -54,6 +54,7 @@ describe('PlatformService profile photos', () => {
 
     expect(query.mock.calls[0]?.[0]).toContain('LEFT JOIN relationship_events');
     expect(query.mock.calls[0]?.[0]).toContain('related_profile');
+    expect(query.mock.calls[0]?.[0]).toContain("'like_received'");
     expect(query.mock.calls[0]?.[1]).toEqual(['current-user']);
   });
 

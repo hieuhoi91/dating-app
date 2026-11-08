@@ -158,6 +158,11 @@ export class DiscoveryQueryDto {
   max_distance_km?: number;
 }
 
+export class DiscoveryViewDto {
+  @IsUUID()
+  targetUserId!: string;
+}
+
 export class MessagesQueryDto {
   @ValidateIf((_object, value) => value !== undefined)
   @IsISO8601({ strict: true })

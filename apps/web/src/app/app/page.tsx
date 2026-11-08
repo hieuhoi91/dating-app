@@ -726,6 +726,7 @@ export default function AppPage() {
   const liveRefreshInFlight = useRef(false);
   const liveRefreshQueued = useRef(false);
   const knownNotificationIds = useRef(new Set<string>());
+  const viewedProfileIds = useRef(new Set<string>());
   const messageListRef = useRef<HTMLDivElement>(null);
   const chatImageInputRef = useRef<HTMLInputElement>(null);
   const messageInputRef = useRef<HTMLInputElement>(null);
@@ -748,6 +749,21 @@ export default function AppPage() {
     setToast(message);
     window.setTimeout(() => setToast(''), 2600);
   }, []);
+
+  const showMatchNotification = useCallback(
+    (notification: AppNotification) => {
+      const partner = notification.related_profile;
+      if (!partner) return;
+      const person = profileCardFromPublic(partner);
+      setMatchCelebration({
+        partnerId: partner.id,
+        conversationId: null,
+        name: person.name,
+        image: person.image,
+      });
+    },
+    [],
+  );
 
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
@@ -1156,12 +1172,22 @@ export default function AppPage() {
       }
       if (notificationsResult.status === 'fulfilled') {
         const notifications = notificationsResult.value.notifications;
+        const newNotifications = notifications.filter(
+          (notification) => !knownNotificationIds.current.has(notification.id),
+        );
         notifications.forEach((notification) =>
           knownNotificationIds.current.add(notification.id),
         );
         setNotificationData((current) =>
           sameData(current, notifications) ? current : notifications,
         );
+        if (newNotifications.length) {
+          const newestNotification = newNotifications[0];
+          if (newestNotification.type === 'match') {
+            showMatchNotification(newestNotification);
+          }
+          notify(newestNotification.title || 'Bạn có thông báo mới.');
+        }
       }
     } finally {
       liveRefreshInFlight.current = false;
@@ -1170,7 +1196,7 @@ export default function AppPage() {
         void refreshLiveData();
       }
     }
-  }, [router]);
+  }, [notify, router, showMatchNotification]);
 
   useEffect(() => {
     let active = true;
@@ -1326,6 +1352,37 @@ export default function AppPage() {
   }, [notify, refreshLiveData, userId]);
 
   const currentProfile = discoveryProfiles[currentPerson] ?? null;
+  useEffect(() => {
+    if (activeView !== 'discover' || !currentProfile?.id) return;
+    const profileId = currentProfile.id;
+    if (viewedProfileIds.current.has(profileId)) return;
+    viewedProfileIds.current.add(profileId);
+    void apiRequest<{
+      recorded: boolean;
+      discovery: DiscoveryQuota;
+    }>('/api/discovery/views', {
+      method: 'POST',
+      body: JSON.stringify({ targetUserId: profileId }),
+    })
+      .then(({ recorded, discovery }) => {
+        setDiscoveryQuota((current) => {
+          if (
+            current.resets_at === discovery.resets_at &&
+            current.viewed_today !== null &&
+            discovery.viewed_today !== null &&
+            current.viewed_today > discovery.viewed_today
+          ) {
+            return current;
+          }
+          return discovery;
+        });
+        if (!recorded && !discovery.unlimited && discovery.remaining === 0) {
+          setDiscoveryProfiles([]);
+          notify('Bạn đã hết lượt khám phá hôm nay.');
+        }
+      })
+      .catch((error: unknown) => reportApiError(error, notify));
+  }, [activeView, currentProfile?.id, notify]);
   const detailsProfile = detailsProfileOverride ?? currentProfile;
   const profileCompletion = Math.min(
     100,
@@ -1748,6 +1805,13 @@ export default function AppPage() {
     } catch (error) {
       reportApiError(error, notify);
     }
+  };
+
+  const openMatchNotification = (notification: AppNotification) => {
+    const partnerId = notification.related_profile?.id;
+    if (!partnerId) return;
+    showMatchNotification(notification);
+    if (!notification.read_at) void markNotificationRead(notification.id);
   };
 
   const signOut = async () => {
@@ -2990,19 +3054,33 @@ export default function AppPage() {
             : null;
           return (
             <article className="notification-row" key={notification.id}>
-              {relatedPerson && notification.type === 'match' ? (
+              {relatedPerson &&
+              (notification.type === 'match' || notification.type === 'like') ? (
                 <button
                   type="button"
                   className="notification-avatar-button"
-                  aria-label={`Xem hồ sơ của ${relatedPerson.name}`}
+                  aria-label={
+                    notification.type === 'match'
+                      ? `Mở thông báo Match với ${relatedPerson.name}`
+                      : `Xem lượt thích từ ${relatedPerson.name}`
+                  }
                   onClick={() => {
-                    setDetailsProfileOverride(relatedPerson);
-                    setShowDetails(true);
+                    if (notification.type === 'match') {
+                      openMatchNotification(notification);
+                    } else {
+                      if (!notification.read_at)
+                        void markNotificationRead(notification.id);
+                      setActiveView('likes');
+                    }
                   }}
                 >
                   <Avatar image={relatedPerson.image} />
                   <span className="notification-avatar-badge">
-                    <HeartHandshake size={12} />
+                    {notification.type === 'match' ? (
+                      <HeartHandshake size={12} />
+                    ) : (
+                      <Heart size={12} fill="currentColor" />
+                    )}
                   </span>
                 </button>
               ) : relatedPerson && isCoupleNotification ? (
@@ -3066,6 +3144,28 @@ export default function AppPage() {
                   }}
                 >
                   Xem lời mời
+                </button>
+              )}
+              {relatedPerson && notification.type === 'match' && (
+                <button
+                  type="button"
+                  className="button button-outline"
+                  onClick={() => openMatchNotification(notification)}
+                >
+                  Xem Match
+                </button>
+              )}
+              {relatedPerson && notification.type === 'like' && (
+                <button
+                  type="button"
+                  className="button button-outline"
+                  onClick={() => {
+                    if (!notification.read_at)
+                      void markNotificationRead(notification.id);
+                    setActiveView('likes');
+                  }}
+                >
+                  Xem lượt thích
                 </button>
               )}
             </article>

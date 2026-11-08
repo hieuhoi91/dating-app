@@ -76,6 +76,8 @@ export class PlatformService {
          WHEN e.event_type = 'match_created' THEN
            CASE WHEN n.recipient_id = e.actor_id
                 THEN e.new_match_partner_id ELSE e.actor_id END
+         WHEN e.event_type = 'like_received'
+              AND n.recipient_id = e.current_partner_id THEN e.actor_id
          WHEN e.event_type IN ('couple_invitation_created', 'couple_invitation_accepted') THEN
            CASE WHEN n.recipient_id = e.actor_id
                 THEN e.current_partner_id ELSE e.actor_id END
