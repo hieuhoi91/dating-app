@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: dating
+      POSTGRES_USER: dating
+      POSTGRES_PASSWORD: dating_dev_only
+    ports:
+      - "5432:5432"
+    volumes:
+      - dating-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dating -d dating"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  dating-postgres-data:
